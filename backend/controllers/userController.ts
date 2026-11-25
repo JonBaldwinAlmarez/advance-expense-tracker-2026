@@ -3,6 +3,7 @@ import validator from "validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
+import type { AuthRequest } from "../types/auth.js";
 
 // Shape of the JSON body for user registration
 type RegisterBody = {
@@ -117,19 +118,56 @@ export async function registerUser(
   }
 }
 
-// Get user detail
-export async function getCurrentUser(req: Request, res: Response) {
+// GET User details
+
+// Response shape for GET /api/user/me
+type GetUserResponse = {
+  success: boolean;
+  message?: string;
+  user?: PublicUser;
+};
+
+// GET /api/user/me  (protected route: requires the auth middleware)
+
+export async function getCurrentUser(
+  req: AuthRequest<{}, GetUserResponse>,
+  res: Response<GetUserResponse>,
+): Promise<Response<GetUserResponse>> {
+  const userId = req.user?.id; //Get user ID
+
+  // 1. Make sure the auth middleware identified the user
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Not authorized",
+    });
+  }
+
   try {
-    const user = await User.findById(req.user?.id).select("-password");
+    // 2. Fetch the user without the password field
+    const user = await User.findById(userId).select("-password"); // Get user ID
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
-    res.json({ success: true, user });
+
+    // 3. Send back only the public fields
+    return res.json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+      },
+    });
   } catch (error) {
+    // Console error
     console.error("getCurrentUser error:", error);
+
+    // Return error message
     return res.status(500).json({
       success: false,
       message: "Internal server error",
