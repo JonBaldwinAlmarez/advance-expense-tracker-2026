@@ -1,6 +1,6 @@
 import User from "../models/userModel.js";
 import validator from "validator";
-import bcrypt from "bcryptjs";
+import bcrypt, { compare } from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../types/auth.js";
@@ -168,6 +168,92 @@ export async function getCurrentUser(
     console.error("getCurrentUser error:", error);
 
     // Return error message
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+// To change user password
+
+// Shape of the JSON body expected when changing the password
+type UpdatePasswordBody = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+// Shape of every JSON response this controller sends back
+type UpdatePasswordResponse = {
+  success: boolean;
+  message: string;
+};
+
+export async function updateUserPassword(
+  req: AuthRequest<{}, UpdatePasswordResponse, UpdatePasswordBody>,
+  res: Response<UpdatePasswordResponse>,
+): Promise<Response<UpdatePasswordResponse>> {
+  // Get user data
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.user?.id;
+
+  // 1. Make sure the auth middleware identified the user
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Not authorized",
+    });
+  }
+
+  // 2. Make sure both passwords were sent
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Please provide current and new password",
+    });
+  }
+  // 3. Enforce a minimum length (length is a property, not a function)
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must be at least 8 characters long",
+    });
+  }
+
+  try {
+    // 4. Fetch the user, selecting only the password field
+    const user = await User.findById(userId).select("password");
+
+    //Checking
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 5. Check that the current password matches the stored hash
+    const match: boolean = await bcrypt.compare(currentPassword, user.password);
+
+    if (!match) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // 6. Hash the new password (10 salt rounds) and save it
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // 7. Confirm success
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    // Log the real error on the server, send a generic message to the client
+    console.error("updateUserPassword error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
