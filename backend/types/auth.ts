@@ -14,3 +14,8 @@ export type AuthRequest<P = {}, ResBody = any, ReqBody = any> = Request<
 > & {
   user?: AuthUser;
 };
+
+// What we put inside the JWT when it is created (see createToken)
+export type TokenPayload = {
+  id: string;
+};
