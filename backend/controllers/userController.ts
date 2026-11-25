@@ -346,3 +346,89 @@ export async function updateUserPassword(
     });
   }
 }
+
+// Update user profile
+// Shape of the JSON body expected when updating a profile
+type UpdateProfileBody = {
+  name: string;
+  email: string;
+};
+
+// Shape of every JSON response this controller sends back
+type UpdateProfileResponse = {
+  success: boolean;
+  message?: string;
+  user?: PublicUser;
+};
+
+// PUT /api/user/profile  (protected route: requires the auth middleware)
+
+export async function updateUserProfile(
+  req: AuthRequest<{}, UpdateProfileResponse, UpdateProfileBody>,
+  res: Response<UpdateProfileResponse>,
+): Promise<Response<UpdateProfileResponse>> {
+  // get email from the body
+  const { name, email } = req.body;
+
+  const userId = req.user?.id;
+
+  // 1. Make sure the auth middleware identified the user
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Not authorized",
+    });
+  }
+
+  // 2. Make sure the required fields were sent and the email is valid
+  if (!name || !email || !validator.isEmail(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid email and name are required",
+    });
+  }
+
+  try {
+    // 3. Reject the email if ANOTHER user already uses it
+    //    ($ne excludes the current user, so keeping your own email is allowed)
+    const exists = await User.findOne({ email, _id: { $ne: userId } });
+
+    // Validate
+    if (exists) {
+      return res.status(409).json({
+        success: false,
+        message: "Email already in use",
+      });
+    }
+
+    // 4. Update the user and return the new version ({ new: true })
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { name, email },
+      { new: true, runValidators: true, select: "name email" },
+    );
+    // 5. findByIdAndUpdate returns null when no user matches the id
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 6. Send back only the public fields
+    return res.json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error("updateUserProfile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
