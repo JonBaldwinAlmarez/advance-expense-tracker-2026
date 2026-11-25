@@ -118,6 +118,92 @@ export async function registerUser(
   }
 }
 
+// login
+
+// Shape of the JSON body expected on login
+type LoginBody = {
+  email: string;
+  password: string;
+};
+// Shape of every JSON response this controller sends back
+type LoginResponse = {
+  success: boolean;
+  message?: string;
+  user?: PublicUser;
+  token?: string;
+};
+
+export async function userLogin(
+  req: Request<{}, LoginResponse, LoginBody>,
+  res: Response<LoginResponse>,
+): Promise<Response<LoginResponse>> {
+  // DONT FORGET TO GET THE EMAIL AND PASSWORD
+  const { email, password } = req.body;
+
+  // 1. Make sure both fields were sent (return stops the function here)
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Both fields are required!",
+    });
+  }
+
+  // 2. Validate the email format
+  if (!validator.isEmail(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid email format",
+    });
+  }
+
+  try {
+    // 3. Look up the user by email
+    const user = await User.findOne({ email });
+
+    // 4. Same message for "no such user" and "wrong password", so attackers
+    //    can't tell which emails are registered
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password!",
+      });
+    }
+
+    // 5. Compare the plain password with the stored hash
+    const match: boolean = await bcrypt.compare(password, user.password);
+
+    // Validation
+    if (!match) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password!",
+      });
+    }
+
+    // 6. Create a token (ObjectId converted to string)
+    const token: string = createToken(user._id.toString());
+
+    // 7. Send back the user (without the password) and the token
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    // Log the real error on the server, send a generic message to the client
+    console.error("loginUser error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
 // GET User details
 
 // Response shape for GET /api/user/me
