@@ -116,3 +116,23 @@ export async function registerUser(
     });
   }
 }
+
+// Get user detail
+export async function getCurrentUser(req: Request, res: Response) {
+  try {
+    const user = await User.findById(req.user?.id).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error("getCurrentUser error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
