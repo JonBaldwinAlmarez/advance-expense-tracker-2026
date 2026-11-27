@@ -1,8 +1,16 @@
+import { Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout";
+import Dashbroard from "./pages/Dashbroard";
+
 function App() {
   return (
-    <div>
-      <h1 className="bg-red-600">Hello World</h1>
-    </div>
+    <>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Dashbroard />} />
+        </Route>
+      </Routes>
+    </>
   );
 }
 
